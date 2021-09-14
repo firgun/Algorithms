@@ -1,2 +1,2 @@
 # AlgorithmsSpecialization
-Code for Tim Roughgarden's Algorithm's specialisation on Coursera.
+Code for Tim Roughgarden's Algorithms specialisation on Coursera.
