@@ -185,13 +185,14 @@ func (g *graph) randomEdgeIndex() int {
 
 func testContract() {
 	tests := [...]string{
-		// "complete",
-		// "islands",
-		// "star",
-		// "cycle",
-		// "binary_tree_breadth_first",
-		// "binary_tree_depth_first",
+		"complete",
+		"islands",
+		"star",
+		"cycle",
+		"binary_tree_breadth_first",
+		"binary_tree_depth_first",
 		"simple",
+		"simple2",
 	}
 	for _, t := range tests {
 		fmt.Println(t)
@@ -200,33 +201,47 @@ func testContract() {
 			fmt.Printf("failed to load graph, error: %v\n", err)
 			return
 		}
-		fmt.Println(g)
 		n := len(g.nodes)
 		if len(g.edges) < 1 {
 			continue
 		}
 		rand.Seed(time.Now().UnixNano())
+
+		fmt.Println(g)
+
 		for i := 0; i < 10; i++ {
 			for n > 2 {
 				eidx := g.randomEdgeIndex()
+
+				theEdge := g.edges[eidx]
+				fmt.Printf("choose {%d, %d}\n\n", theEdge.a+1, theEdge.b+1)
+
 				sn := contract(g, eidx)
+
 				idxToDel := make([]int, 0)
-				refToDel := make([]int, 0)
-				for refIndex, index := range sn.edges {
+				for _, index := range sn.edges {
 					edge := g.edges[index]
 					if edge.a == edge.b {
 						idxToDel = append(idxToDel, index)
-						refToDel = append(refToDel, refIndex)
 					}
 				}
+
 				for _, index := range idxToDel {
 					delete(g.edges, index)
+					del := -1
+					for refIndex, ref := range sn.edges {
+						if index == ref {
+							del = refIndex
+							break
+						}
+					}
+					if del != -1 {
+						l := len(sn.edges) - 1
+						sn.edges[l], sn.edges[del] = sn.edges[del], sn.edges[l]
+						sn.edges = sn.edges[:l]
+					}
 				}
-				for _, refIndex := range refToDel {
-					last := len(sn.edges) - 1
-					sn.edges[last], sn.edges[refIndex] = sn.edges[refIndex], sn.edges[last]
-					sn.edges = sn.edges[:last]
-				}
+
 				g.nodes[sn.id] = sn
 				fmt.Println(g)
 				n--
