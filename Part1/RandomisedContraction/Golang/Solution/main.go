@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type node struct {
@@ -23,29 +25,53 @@ type graph struct {
 	edges map[int]edge
 }
 
+const (
+	graphStringModeMatrix = iota
+	graphStringModeList
+)
+
+var graphStringMode int = graphStringModeList
+
 func (g *graph) String() string {
 	var buf bytes.Buffer
-	for _, a := range g.nodes {
-		for _, b := range g.nodes {
-			if a.id == b.id {
-				buf.WriteString("? ")
-				continue
-			}
-			incident := false
-			for _, ae := range a.edges {
-				edge := g.edges[ae]
-				if edge.a == b.id || edge.b == b.id {
-					incident = true
-					break
+	if graphStringMode == graphStringModeMatrix {
+		for _, a := range g.nodes {
+			for _, b := range g.nodes {
+				if a.id == b.id {
+					buf.WriteString("? ")
+					continue
+				}
+				incident := false
+				for _, ae := range a.edges {
+					edge := g.edges[ae]
+					if edge.a == b.id || edge.b == b.id {
+						incident = true
+						break
+					}
+				}
+				if incident {
+					buf.WriteString("% ")
+				} else {
+					buf.WriteString("_ ")
 				}
 			}
-			if incident {
-				buf.WriteString("% ")
-			} else {
-				buf.WriteString("_ ")
-			}
+			buf.WriteString("\n")
 		}
-		buf.WriteString("\n")
+	} else if graphStringMode == graphStringModeList {
+		for _, nd := range g.nodes {
+			buf.WriteString(strconv.Itoa(nd.id+1) + " ")
+			for _, index := range nd.edges {
+				edge := g.edges[index]
+				adjacent := edge.a
+				if edge.a == nd.id {
+					adjacent = edge.b
+				}
+				buf.WriteString(strconv.Itoa(adjacent+1) + " ")
+			}
+			buf.WriteRune('\n')
+		}
+	} else {
+		panic(fmt.Sprintf("bad string mode: %d", graphStringMode))
 	}
 	return buf.String()
 }
@@ -77,7 +103,7 @@ func load(path string) (*graph, error) {
 		if len(numbers) < 1 {
 			continue
 		}
-		nodeId := numbers[0]-1
+		nodeId := numbers[0] - 1
 		g.nodes = append(g.nodes, node{nodeId, make([]int, 0, len(numbers))})
 		if len(numbers) > 1 {
 			for _, n := range numbers[1:] {
@@ -113,72 +139,100 @@ func testGraphLoad() {
 
 // contract fuses the two endpoints of a specified edge together creating a
 // supernode. The resulting supernode is adjacent to all nodes either of the
-// endpoints where adjacent to.
-func contract(g *graph, edgeIdx int) {
-	// TODO: Handle some edge cases
-	// ---
-	//  [ ] there's not two nodes in the graph
-	//  [ ] there's not edge with id edgeIdx in graph 
-	//  [ ] the edge we are given to contract is itself a self-loop
+// endpoints where adjacent to. Returns the supernode.
+func contract(g *graph, edgeIdx int) node {
+	if len(g.nodes) < 2 {
+		panic("less than 2 nodes in graph")
+	}
+
+	if _, ok := g.edges[edgeIdx]; !ok {
+		panic(fmt.Sprintf("no edge with index %s", edgeIdx))
+	}
+
 	e := g.edges[edgeIdx]
 	na := &g.nodes[e.a]
 	nb := &g.nodes[e.b]
+
+	if na.id == nb.id {
+		panic("trying to contract self-loop")
+	}
+
+	// for all edges incident on nb, swap the endpoint which points to B with
+	// A
 	for _, bEdgeIdx := range nb.edges {
 		bEdge := g.edges[bEdgeIdx]
-		if (bEdge.a == e.a && bEdge.b == e.b) || (bEdge.a == e.b && bEdge.b == e.a) {
-			for i, eidx := range na.edges {
-				if eidx == bEdgeIdx {
-					last := len(na.edges)-1
-					na.edges[i], na.edges[last] = na.edges[last], na.edges[i]
-					na.edges = na.edges[:len(na.edges)]
-				}
-			}
-			// we're never going to be accessing b again, so we can just forget it exists? For our purposes??
-			delete(g.edges, bEdgeIdx)
-			continue
-		}
 		if bEdge.a == e.b {
 			bEdge.a = e.a
 		} else {
 			bEdge.b = e.a
 		}
 		g.edges[bEdgeIdx] = bEdge
-		g.nodes[e.a].edges = append(g.nodes[e.a].edges, bEdgeIdx)
+		na.edges = append(na.edges, bEdgeIdx)
 	}
+
+	// remove all references to incident edges from b.
 	nb.edges = nil
-	delete(g.edges, edgeIdx)
+
+	return *na
 }
 
 func (g *graph) randomEdgeIndex() int {
 	for k, _ := range g.edges {
 		return k
 	}
-	panic("no edges!") 
+	panic("no edges!")
 }
 
 func testContract() {
-        tests := [...]string{
-                "complete",
-                "islands",
-                "star",
-                "cycle",
-                "binary_tree_breadth_first",
-                "binary_tree_depth_first",
-        }
-        for _, t := range tests {
-                g, err := load(fmt.Sprintf("../../Tests/%s.input", t))
-                if err != nil {
-                        fmt.Printf("failed to load graph, error: %v\n", err)
-                        return
-                }
-		fmt.Println(g)
-		for len(g.edges) > 1 {
-			eidx := g.randomEdgeIndex()
-			contract(g, eidx)
-			fmt.Println(g)
+	tests := [...]string{
+		// "complete",
+		// "islands",
+		// "star",
+		// "cycle",
+		// "binary_tree_breadth_first",
+		// "binary_tree_depth_first",
+		"simple",
+	}
+	for _, t := range tests {
+		fmt.Println(t)
+		g, err := load(fmt.Sprintf("../../Tests/%s.input", t))
+		if err != nil {
+			fmt.Printf("failed to load graph, error: %v\n", err)
+			return
 		}
-		break
-        }	
+		fmt.Println(g)
+		n := len(g.nodes)
+		if len(g.edges) < 1 {
+			continue
+		}
+		rand.Seed(time.Now().UnixNano())
+		for i := 0; i < 10; i++ {
+			for n > 2 {
+				eidx := g.randomEdgeIndex()
+				sn := contract(g, eidx)
+				idxToDel := make([]int, 0)
+				refToDel := make([]int, 0)
+				for refIndex, index := range sn.edges {
+					edge := g.edges[index]
+					if edge.a == edge.b {
+						idxToDel = append(idxToDel, index)
+						refToDel = append(refToDel, refIndex)
+					}
+				}
+				for _, index := range idxToDel {
+					delete(g.edges, index)
+				}
+				for _, refIndex := range refToDel {
+					last := len(sn.edges) - 1
+					sn.edges[last], sn.edges[refIndex] = sn.edges[refIndex], sn.edges[last]
+					sn.edges = sn.edges[:last]
+				}
+				g.nodes[sn.id] = sn
+				fmt.Println(g)
+				n--
+			}
+		}
+	}
 }
 
 func main() {
