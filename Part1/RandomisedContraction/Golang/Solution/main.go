@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"strconv"
@@ -183,6 +184,86 @@ func (g *graph) randomEdgeIndex() int {
 	panic("no edges!")
 }
 
+type testCasePath struct {
+	inputPath  string
+	outputPath string
+}
+
+type test struct {
+	path testCasePath
+	in   *graph
+	out  int
+}
+
+var testsPath string = "../../Tests/"
+
+func listTests() []test {
+	files, err := ioutil.ReadDir(testsPath)
+	if err != nil {
+		panic(err)
+	}
+	paths := make(map[string]testCasePath)
+	for _, f := range files {
+		if f.Mode().IsRegular() {
+			fn := f.Name()
+			if strings.HasPrefix(fn, "input") {
+				key := strings.Replace(fn, "input_", "", 1)
+				path := paths[key]
+				path.inputPath = fn
+				paths[key] = path
+			} else if strings.HasPrefix(fn, "output") {
+				key := strings.Replace(fn, "output_", "", 1)
+				path := paths[key]
+				path.outputPath = fn
+				paths[key] = path
+			}
+		}
+	}
+	// validate test case paths
+	toDelete := make(map[string]bool)
+	for k, p := range paths {
+		if p.inputPath == "" {
+			toDelete[k] = true
+			fmt.Println("warning: test case missing input path, omitting from list")
+		}
+		if p.outputPath == "" {
+			toDelete[k] = true
+			fmt.Println("warning: test case missing output path, omitting from list")
+		}
+	}
+	for key, _ := range toDelete {
+		delete(paths, key)
+	}
+	pathList := make([]testCasePath, 0)
+	for _, p := range paths {
+		pathList = append(pathList, p)
+	}
+	ts := make([]test, 0)
+	for _, path := range paths {
+		g, err := load(testsPath + path.inputPath)
+		if err != nil {
+			panic(err)
+		}
+		bytes, err := ioutil.ReadFile(testsPath + path.outputPath)
+		if err != nil {
+			panic(err)
+		}
+		s := strings.Trim(string(bytes), "\n\t ")
+		a, err := strconv.Atoi(s)
+		if err != nil {
+			panic(err)
+		}
+		ts = append(ts, test{path, g, a})
+	}
+	return ts
+}
+
+func runTests() {
+	for _, t := range listTests() {
+		fmt.Println(t.path, t.out)
+	}
+}
+
 func testContract() {
 	tests := [...]string{
 		"complete",
@@ -252,5 +333,6 @@ func testContract() {
 
 func main() {
 	// testGraphLoad()
-	testContract()
+	// testContract()
+	runTests()
 }
