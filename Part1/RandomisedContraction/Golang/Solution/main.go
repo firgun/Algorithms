@@ -85,6 +85,9 @@ func load(path string) (*graph, error) {
 	defer f.Close()
 	s := bufio.NewScanner(f)
 	g := &graph{nodes: make([]node, 0), edges: make(map[int]edge)}
+
+	exists := make(map[edge]bool)
+
 	for s.Scan() {
 		if s.Err() != nil {
 			return nil, fmt.Errorf("error occurred while scanning: %v", err)
@@ -109,17 +112,12 @@ func load(path string) (*graph, error) {
 		if len(numbers) > 1 {
 			for _, n := range numbers[1:] {
 				ne := edge{nodeId, n - 1}
-
-				found := false
-				for _, e := range g.edges {
-					if (e.a == ne.a && e.b == ne.b) || (e.a == ne.b && e.b == ne.a) {
-						found = true
-						break
-					}
+				if ne.a < ne.b {
+					ne.a, ne.b = ne.b, ne.a
 				}
-
-				if !found {
+				if !exists[ne] {
 					g.edges[len(g.edges)] = ne
+					exists[ne] = true
 				}
 			}
 		}
@@ -333,7 +331,7 @@ func minCut(g *graph) int {
 		panic("invalid args, need at least 2 nodes, to find min cut")
 	}
 	m := -1
-	for t := 0; t < len(g.nodes)*len(g.nodes)*100; t++ {
+	for t := 0; t < len(g.nodes)*len(g.nodes); t++ {
 		rand.Seed(time.Now().UnixNano())
 		n := rcontract(g.copy())
 		if n < m || m == -1 {
