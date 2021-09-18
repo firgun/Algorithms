@@ -108,7 +108,19 @@ func load(path string) (*graph, error) {
 		g.nodes = append(g.nodes, node{nodeId, make([]int, 0, len(numbers))})
 		if len(numbers) > 1 {
 			for _, n := range numbers[1:] {
-				g.edges[len(g.edges)] = edge{nodeId, n - 1}
+				ne := edge{nodeId, n - 1}
+
+				found := false
+				for _, e := range g.edges {
+					if (e.a == ne.a && e.b == ne.b) || (e.a == ne.b && e.b == ne.a) {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					g.edges[len(g.edges)] = ne
+				}
 			}
 		}
 	}
@@ -136,45 +148,6 @@ func testGraphLoad() {
 		}
 		fmt.Println(g)
 	}
-}
-
-// contract fuses the two endpoints of a specified edge together creating a
-// supernode. The resulting supernode is adjacent to all nodes either of the
-// endpoints where adjacent to. Returns the supernode.
-func contract(g *graph, edgeIdx int) node {
-	if len(g.nodes) < 2 {
-		panic("less than 2 nodes in graph")
-	}
-
-	if _, ok := g.edges[edgeIdx]; !ok {
-		panic(fmt.Sprintf("no edge with index %s", edgeIdx))
-	}
-
-	e := g.edges[edgeIdx]
-	na := &g.nodes[e.a]
-	nb := &g.nodes[e.b]
-
-	if na.id == nb.id {
-		panic("trying to contract self-loop")
-	}
-
-	// for all edges incident on nb, swap the endpoint which points to B with
-	// A
-	for _, bEdgeIdx := range nb.edges {
-		bEdge := g.edges[bEdgeIdx]
-		if bEdge.a == e.b {
-			bEdge.a = e.a
-		} else {
-			bEdge.b = e.a
-		}
-		g.edges[bEdgeIdx] = bEdge
-		na.edges = append(na.edges, bEdgeIdx)
-	}
-
-	// remove all references to incident edges from b.
-	nb.edges = nil
-
-	return *na
 }
 
 func (g *graph) randomEdgeIndex() int {
@@ -258,9 +231,125 @@ func listTests() []test {
 	return ts
 }
 
+func (g *graph) copy() *graph {
+	c := &graph{make([]node, len(g.nodes)), make(map[int]edge)}
+	copy(c.nodes, g.nodes)
+	for k, v := range g.edges {
+		c.edges[k] = v
+	}
+	return c
+}
+
+// contract fuses the two endpoints of a specified edge together creating a
+// supernode. The resulting supernode is adjacent to all nodes either of the
+// endpoints where adjacent to. Returns the supernode.
+func contract(g *graph, edgeIdx int) node {
+	if len(g.nodes) < 2 {
+		panic("less than 2 nodes in graph")
+	}
+
+	if _, ok := g.edges[edgeIdx]; !ok {
+		panic(fmt.Sprintf("no edge with index %s", edgeIdx))
+	}
+
+	e := g.edges[edgeIdx]
+	na := &g.nodes[e.a]
+	nb := &g.nodes[e.b]
+
+	if na.id == nb.id {
+		panic("trying to contract self-loop")
+	}
+
+	// for all edges incident on nb, swap the endpoint which points to B with
+	// A
+	for _, bEdgeIdx := range nb.edges {
+		bEdge := g.edges[bEdgeIdx]
+		if bEdge.a == e.b {
+			bEdge.a = e.a
+		} else {
+			bEdge.b = e.a
+		}
+		g.edges[bEdgeIdx] = bEdge
+		na.edges = append(na.edges, bEdgeIdx)
+	}
+
+	// remove all references to incident edges from b.
+	nb.edges = nil
+
+	return *na
+}
+
+func rcontract(g *graph) int {
+	for n := len(g.nodes); n > 2; n-- {
+		/*
+			ei := -1
+			for k, _ := range g.edges {
+				ei = k
+				break
+			}
+			if ei == -1 {
+				panic("no edge")
+			}
+		*/
+		options := make([]int, 0, len(g.edges))
+		for k, _ := range g.edges {
+			options = append(options, k)
+		}
+		ri := rand.Intn(len(options))
+		ei := options[ri]
+
+		sn := contract(g, ei)
+
+		remove := make([]int, 0)
+		for _, index := range sn.edges {
+			edge := g.edges[index]
+			if edge.a == edge.b {
+				remove = append(remove, index)
+			}
+		}
+
+		for _, index := range remove {
+			delete(g.edges, index)
+			del := -1
+			for refIndex, ref := range sn.edges {
+				if index == ref {
+					del = refIndex
+					break
+				}
+			}
+			if del != -1 {
+				l := len(sn.edges) - 1
+				sn.edges[l], sn.edges[del] = sn.edges[del], sn.edges[l]
+				sn.edges = sn.edges[:l]
+			}
+		}
+	}
+
+	return len(g.edges)
+}
+
+func minCut(g *graph) int {
+	if len(g.nodes) < 2 {
+		panic("invalid args, need at least 2 nodes, to find min cut")
+	}
+	m := -1
+	for t := 0; t < len(g.nodes)*len(g.nodes)*100; t++ {
+		rand.Seed(time.Now().UnixNano())
+		n := rcontract(g.copy())
+		if n < m || m == -1 {
+			m = n
+		}
+	}
+	return m
+}
+
 func runTests() {
 	for _, t := range listTests() {
-		fmt.Println(t.path, t.out)
+		if len(t.in.nodes) > 20 {
+			continue
+		}
+		k := minCut(t.in)
+		fmt.Println(k, t.out, t.path.inputPath)
 	}
 }
 
@@ -323,7 +412,6 @@ func testContract() {
 					}
 				}
 
-				g.nodes[sn.id] = sn
 				fmt.Println(g)
 				n--
 			}
