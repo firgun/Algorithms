@@ -1,424 +1,173 @@
 package main
 
+// todo
+// ---
+// for each endpoint of an edge, store a pointer to a pointer to a node
+//
+// for each node, store an array of array of edges
+//
+// a supernode is just a node with the top-level array having more than one
+// element
+//
+// if you want to contract a supernode and a node, you just add the one element
+// in the node to the array in the supernode O(1)
+//
+// if you want to contract two regular ndoes, just pretend that the one with
+// more incident edges is the supernode, and do as above O(1)
+//
+// if you want to contract two supernodes together, just concatenate the
+// smaller to the larger, so the larger supernode becomes the new supernode
+// O(n) time
+//
+// make a shuffled array of edges up front, then for each contraction pick pop
+// an edge of the array.
+//
+// the assignments format specifies a single edge "from the point of view" of
+// both endpoints
+//
+// handle parallel edges in graph loading
+
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
-type node struct {
-	id    int
-	edges []int
+type Graph struct {
+	Nodes []*Node
+	Edges []*Edge
 }
 
-type edge struct {
-	a, b int
+type Node struct {
+	Edges [][]*Edge
+	Label int
 }
 
-type graph struct {
-	nodes []node
-	edges map[int]edge
+type Edge [2]int
+
+func (e Edge) String() string {
+	return fmt.Sprintf("{%d, %d}", e[0]+1, e[1]+1)
 }
 
-const (
-	graphStringModeMatrix = iota
-	graphStringModeList
-)
-
-var graphStringMode int = graphStringModeList
-
-func (g *graph) String() string {
-	var buf bytes.Buffer
-	if graphStringMode == graphStringModeMatrix {
-		for _, a := range g.nodes {
-			for _, b := range g.nodes {
-				if a.id == b.id {
-					buf.WriteString("? ")
-					continue
-				}
-				incident := false
-				for _, ae := range a.edges {
-					edge := g.edges[ae]
-					if edge.a == b.id || edge.b == b.id {
-						incident = true
-						break
-					}
-				}
-				if incident {
-					buf.WriteString("% ")
-				} else {
-					buf.WriteString("_ ")
-				}
-			}
-			buf.WriteString("\n")
-		}
-	} else if graphStringMode == graphStringModeList {
-		for _, nd := range g.nodes {
-			buf.WriteString(strconv.Itoa(nd.id+1) + " ")
-			for _, index := range nd.edges {
-				edge := g.edges[index]
-				adjacent := edge.a
-				if edge.a == nd.id {
-					adjacent = edge.b
-				}
-				buf.WriteString(strconv.Itoa(adjacent+1) + " ")
-			}
-			buf.WriteRune('\n')
-		}
-	} else {
-		panic(fmt.Sprintf("bad string mode: %d", graphStringMode))
+func NewEdge(a, b int) Edge {
+	e := Edge([2]int{a, b})
+	if e[0] > e[1] {
+		e[0], e[1] = e[1], e[0]
 	}
-	return buf.String()
+	return e
 }
 
-func load(path string) (*graph, error) {
-	f, err := os.Open(path)
+func readGraph(path string) (*Graph, error) {
+	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load graph: %v\n", err)
+		return nil, fmt.Errorf("cannot read file at %q: %v", path, err)
 	}
-	defer f.Close()
-	s := bufio.NewScanner(f)
-	g := &graph{nodes: make([]node, 0), edges: make(map[int]edge)}
-
-	exists := make(map[edge]bool)
-
-	for s.Scan() {
-		if s.Err() != nil {
-			return nil, fmt.Errorf("error occurred while scanning: %v", err)
+	g := Graph{make([]*Node, 0), make([]*Edge, 0)}
+	for _, ln := range strings.Split(string(bytes), "\n") {
+		fields := strings.Fields(ln)
+		if len(fields) < 1 {
+			continue
 		}
-		ss := strings.Split(s.Text(), " ")
-		numbers := make([]int, 0, len(ss))
-		for _, s := range ss {
-			if s == "" {
-				continue
-			}
-			n, err := strconv.Atoi(s)
+		indices := make([]int, len(fields))
+		for i, field := range fields {
+			n, err := strconv.Atoi(field)
 			if err != nil {
-				return nil, fmt.Errorf("invalid token: %v", err)
+				return nil, fmt.Errorf("cannot convert field %q to int: %v", field, err)
 			}
-			numbers = append(numbers, n)
+			indices[i] = n
 		}
-		if len(numbers) < 1 {
+		v := indices[0]
+		edges := make([]*Edge, len(indices)-1)
+		edgeCounts := make(map[Edge]int)
+		if len(indices) > 1 {
+			for i, adj := range indices[1:] {
+				e := NewEdge(v-1, adj-1)
+				ep := &e
+				edges[i] = ep
+				if edgeCounts[*ep] == 0 {
+					g.Edges = append(g.Edges, ep)
+				}
+				edgeCounts[*ep]++
+			}
+		}
+		n := &Node{make([][]*Edge, 1), len(g.Nodes)}
+		n.Edges[0] = edges
+		g.Nodes = append(g.Nodes, n)
+	}
+	return &g, nil
+}
+
+func (g *Graph) dump() {
+	for vi, v := range g.Nodes {
+		if vi != v.Label {
+			fmt.Println("deleted")
 			continue
 		}
-		nodeId := numbers[0] - 1
-		g.nodes = append(g.nodes, node{nodeId, make([]int, 0, len(numbers))})
-		if len(numbers) > 1 {
-			for _, n := range numbers[1:] {
-				ne := edge{nodeId, n - 1}
-				if ne.a < ne.b {
-					ne.a, ne.b = ne.b, ne.a
-				}
-				if !exists[ne] {
-					g.edges[len(g.edges)] = ne
-					exists[ne] = true
-				}
-			}
-		}
-	}
-	for i, ed := range g.edges {
-		g.nodes[ed.a].edges = append(g.nodes[ed.a].edges, i)
-		g.nodes[ed.b].edges = append(g.nodes[ed.b].edges, i)
-	}
-	return g, nil
-}
-
-func testGraphLoad() {
-	tests := [...]string{
-		"complete",
-		"islands",
-		"star",
-		"cycle",
-		"binary_tree_breadth_first",
-		"binary_tree_depth_first",
-	}
-	for _, t := range tests {
-		g, err := load(fmt.Sprintf("../../Tests/%s.input", t))
-		if err != nil {
-			fmt.Printf("failed to load graph, error: %v\n", err)
-			return
-		}
-		fmt.Println(g)
-	}
-}
-
-func (g *graph) randomEdgeIndex() int {
-	for k, _ := range g.edges {
-		return k
-	}
-	panic("no edges!")
-}
-
-type testCasePath struct {
-	inputPath  string
-	outputPath string
-}
-
-type test struct {
-	path testCasePath
-	in   *graph
-	out  int
-}
-
-var testsPath string = "../../Tests/"
-
-func listTests() []test {
-	files, err := ioutil.ReadDir(testsPath)
-	if err != nil {
-		panic(err)
-	}
-	paths := make(map[string]testCasePath)
-	for _, f := range files {
-		if f.Mode().IsRegular() {
-			fn := f.Name()
-			if strings.HasPrefix(fn, "input") {
-				key := strings.Replace(fn, "input_", "", 1)
-				path := paths[key]
-				path.inputPath = fn
-				paths[key] = path
-			} else if strings.HasPrefix(fn, "output") {
-				key := strings.Replace(fn, "output_", "", 1)
-				path := paths[key]
-				path.outputPath = fn
-				paths[key] = path
-			}
-		}
-	}
-	// validate test case paths
-	toDelete := make(map[string]bool)
-	for k, p := range paths {
-		if p.inputPath == "" {
-			toDelete[k] = true
-			fmt.Println("warning: test case missing input path, omitting from list")
-		}
-		if p.outputPath == "" {
-			toDelete[k] = true
-			fmt.Println("warning: test case missing output path, omitting from list")
-		}
-	}
-	for key, _ := range toDelete {
-		delete(paths, key)
-	}
-	pathList := make([]testCasePath, 0)
-	for _, p := range paths {
-		pathList = append(pathList, p)
-	}
-	ts := make([]test, 0)
-	for _, path := range paths {
-		g, err := load(testsPath + path.inputPath)
-		if err != nil {
-			panic(err)
-		}
-		bytes, err := ioutil.ReadFile(testsPath + path.outputPath)
-		if err != nil {
-			panic(err)
-		}
-		s := strings.Trim(string(bytes), "\n\t ")
-		a, err := strconv.Atoi(s)
-		if err != nil {
-			panic(err)
-		}
-		ts = append(ts, test{path, g, a})
-	}
-	return ts
-}
-
-func (g *graph) copy() *graph {
-	c := &graph{make([]node, len(g.nodes)), make(map[int]edge)}
-	copy(c.nodes, g.nodes)
-	for k, v := range g.edges {
-		c.edges[k] = v
-	}
-	return c
-}
-
-// contract fuses the two endpoints of a specified edge together creating a
-// supernode. The resulting supernode is adjacent to all nodes either of the
-// endpoints where adjacent to. Returns the supernode.
-func contract(g *graph, edgeIdx int) node {
-	if len(g.nodes) < 2 {
-		panic("less than 2 nodes in graph")
-	}
-
-	if _, ok := g.edges[edgeIdx]; !ok {
-		panic(fmt.Sprintf("no edge with index %s", edgeIdx))
-	}
-
-	e := g.edges[edgeIdx]
-	na := &g.nodes[e.a]
-	nb := &g.nodes[e.b]
-
-	if na.id == nb.id {
-		panic("trying to contract self-loop")
-	}
-
-	// for all edges incident on nb, swap the endpoint which points to B with
-	// A
-	for _, bEdgeIdx := range nb.edges {
-		bEdge := g.edges[bEdgeIdx]
-		if bEdge.a == e.b {
-			bEdge.a = e.a
-		} else {
-			bEdge.b = e.a
-		}
-		g.edges[bEdgeIdx] = bEdge
-		na.edges = append(na.edges, bEdgeIdx)
-	}
-
-	// remove all references to incident edges from b.
-	nb.edges = nil
-
-	return *na
-}
-
-func rcontract(g *graph) int {
-	for n := len(g.nodes); n > 2; n-- {
-		/*
-			ei := -1
-			for k, _ := range g.edges {
-				ei = k
-				break
-			}
-			if ei == -1 {
-				panic("no edge")
-			}
-		*/
-		options := make([]int, 0, len(g.edges))
-		for k, _ := range g.edges {
-			options = append(options, k)
-		}
-		ri := rand.Intn(len(options))
-		ei := options[ri]
-
-		sn := contract(g, ei)
-
-		remove := make([]int, 0)
-		for _, index := range sn.edges {
-			edge := g.edges[index]
-			if edge.a == edge.b {
-				remove = append(remove, index)
-			}
-		}
-
-		for _, index := range remove {
-			delete(g.edges, index)
-			del := -1
-			for refIndex, ref := range sn.edges {
-				if index == ref {
-					del = refIndex
-					break
-				}
-			}
-			if del != -1 {
-				l := len(sn.edges) - 1
-				sn.edges[l], sn.edges[del] = sn.edges[del], sn.edges[l]
-				sn.edges = sn.edges[:l]
-			}
-		}
-	}
-
-	return len(g.edges)
-}
-
-func minCut(g *graph) int {
-	if len(g.nodes) < 2 {
-		panic("invalid args, need at least 2 nodes, to find min cut")
-	}
-	m := -1
-	for t := 0; t < len(g.nodes)*len(g.nodes); t++ {
-		rand.Seed(time.Now().UnixNano())
-		n := rcontract(g.copy())
-		if n < m || m == -1 {
-			m = n
-		}
-	}
-	return m
-}
-
-func runTests() {
-	for _, t := range listTests() {
-		if len(t.in.nodes) > 20 {
+		fmt.Printf("%d ", v.Label+1)
+		if v == nil {
 			continue
 		}
-		k := minCut(t.in)
-		fmt.Println(k, t.out, t.path.inputPath)
+		if v.Edges != nil {
+			for listIndex, edgeList := range v.Edges {
+				for eIndex, e := range edgeList {
+					endpoint := 0
+					if g.Nodes[e[0]].Label == v.Label {
+						endpoint = 1
+					}
+					fmt.Printf("%d", g.Nodes[e[endpoint]].Label+1)
+					if eIndex < len(v.Edges[listIndex])-1 {
+						fmt.Print(" ")
+					}
+				}
+				if listIndex < len(v.Edges)-1 {
+					fmt.Print(" ")
+				}
+			}
+		}
+		fmt.Println()
 	}
 }
 
-func testContract() {
-	tests := [...]string{
-		"complete",
-		"islands",
-		"star",
-		"cycle",
-		"binary_tree_breadth_first",
-		"binary_tree_depth_first",
-		"simple",
-		"simple2",
+func (g *Graph) contract(e *Edge) {
+	// fmt.Println(e)
+	for _, edgeList := range g.Nodes[e[1]].Edges {
+		g.Nodes[e[0]].Edges = append(g.Nodes[e[0]].Edges, edgeList)
 	}
-	for _, t := range tests {
-		fmt.Println(t)
-		g, err := load(fmt.Sprintf("../../Tests/%s.input", t))
-		if err != nil {
-			fmt.Printf("failed to load graph, error: %v\n", err)
-			return
+	g.Nodes[e[1]].Edges = nil
+	g.Nodes[e[1]] = g.Nodes[e[0]]
+}
+
+func (g *Graph) minCut() int {
+	// *old_ptr_ptr = *last_ptr_ptr
+	// pop(node_array)
+
+	/*
+		for nodesLeft := len(g.Nodes); nodesLeft > 2; nodesLeft-- {
+
 		}
-		n := len(g.nodes)
-		if len(g.edges) < 1 {
-			continue
-		}
-		rand.Seed(time.Now().UnixNano())
+	*/
 
-		fmt.Println(g)
+	g.contract(g.Edges[1])
 
-		for i := 0; i < 10; i++ {
-			for n > 2 {
-				eidx := g.randomEdgeIndex()
-
-				theEdge := g.edges[eidx]
-				fmt.Printf("choose {%d, %d}\n\n", theEdge.a+1, theEdge.b+1)
-
-				sn := contract(g, eidx)
-
-				idxToDel := make([]int, 0)
-				for _, index := range sn.edges {
-					edge := g.edges[index]
-					if edge.a == edge.b {
-						idxToDel = append(idxToDel, index)
-					}
-				}
-
-				for _, index := range idxToDel {
-					delete(g.edges, index)
-					del := -1
-					for refIndex, ref := range sn.edges {
-						if index == ref {
-							del = refIndex
-							break
-						}
-					}
-					if del != -1 {
-						l := len(sn.edges) - 1
-						sn.edges[l], sn.edges[del] = sn.edges[del], sn.edges[l]
-						sn.edges = sn.edges[:l]
-					}
-				}
-
-				fmt.Println(g)
-				n--
-			}
-		}
-	}
+	return -1000
 }
 
 func main() {
-	// testGraphLoad()
-	// testContract()
-	runTests()
+	if len(os.Args) != 2 {
+		fmt.Println("error: bad args, specify path to graph input file")
+		os.Exit(1)
+	}
+
+	g, err := readGraph(os.Args[1])
+	if err != nil {
+		fmt.Printf("error: %v", err)
+		os.Exit(1)
+	}
+
+	g.dump()
+	g.contract(g.Edges[0])
+	fmt.Println()
+	g.dump()
 }
