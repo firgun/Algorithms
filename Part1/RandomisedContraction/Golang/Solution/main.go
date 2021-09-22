@@ -1,37 +1,9 @@
 package main
 
-//
 // todo
 //
-// If we per chance pick an edge that happens to be a self loop, then we get
-// rid of it and never have to deal with it again.
+// we need an arbitrarily long trail of pointers to the supernode that a node has previously been contracted into
 //
-// What's an upper bound on the number of self-loops that can form throughout
-// the algorithm's execution?
-//
-// If the number of self-loops we have to deal with is linear over the whole
-// execution of the algorithm then we only do linear work in addition to our
-// already linear work and the running time of a single trial stays linear.
-//
-// there obviously can't be more than m self-loops, because all self-loops must
-// come from an edge in the initial state of the graph.
-//
-// the number of self-loops is actually m - k? Isn't it? Because all edges that
-// don't end up as self-loops at the end of the execution end up as crossing
-// edges.
-//
-// Well, that's linear in the number of edges, and we have to read each edge
-// while reading the input.
-//
-// So it wouldn't take more time than reading the input -- asymptotically
-// speaking.
-//
-// so we don't need to delete a self-loop until we randomly sample it.
-//
-// we can have a shuffled array of m edges, then pick at random, if the edge
-// picked at random is a self-loop, then we discard it and try again. We'll end
-// up discarding at most m - k edges over the whole execution which is
-// obviously only linear in the number of edges.
 
 import (
 	"fmt"
@@ -44,13 +16,14 @@ import (
 )
 
 type Graph struct {
-	Nodes []*Node
-	Edges []*Edge
+	Nodes []Node
+	Edges []Edge
 }
 
 type Node struct {
-	Edges [][]*Edge
-	Label int
+	Edges  []int
+	Label  int
+	Parent int
 }
 
 type Edge [2]int
@@ -68,7 +41,8 @@ func readGraph(path string) (*Graph, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot read file at %q: %v", path, err)
 	}
-	g := Graph{make([]*Node, 0), make([]*Edge, 0)}
+	g := Graph{Nodes: make([]Node, 0), Edges: make([]Edge, 0)}
+	edgeToIndex := make(map[Edge]int)
 	for _, ln := range strings.Split(string(bytes), "\n") {
 		fields := strings.Fields(ln)
 		if len(fields) < 1 {
@@ -83,67 +57,89 @@ func readGraph(path string) (*Graph, error) {
 			indices[i] = n
 		}
 		v := indices[0]
-		edges := make([]*Edge, len(indices)-1)
-		edgeCounts := make(map[Edge]int)
+		edges := make([]int, len(indices)-1)
 		if len(indices) > 1 {
 			for i, adj := range indices[1:] {
 				e := NewEdge(v-1, adj-1)
-				ep := &e
-				edges[i] = ep
-				if edgeCounts[*ep] == 0 {
-					g.Edges = append(g.Edges, ep)
+				ei, ok := edgeToIndex[e]
+				if !ok {
+					ei = len(g.Edges)
+					g.Edges = append(g.Edges, e)
+					edgeToIndex[e] = ei 
 				}
-				edgeCounts[*ep]++
+				edges[i] = ei
 			}
 		}
-		n := &Node{make([][]*Edge, 1), len(g.Nodes)}
-		n.Edges[0] = edges
+		n := Node{Edges: edges, Label: len(g.Nodes), Parent: -1}
 		g.Nodes = append(g.Nodes, n)
 	}
 	return &g, nil
 }
 
+func (g *Graph) copy() *Graph {
+	c := &Graph{make([]Node, len(g.Nodes)), make([]Edge, len(g.Edges))}
+	for i, e := range g.Edges {
+		c.Edges[i] = e
+	}
+	for i, n := range g.Nodes {
+		edges := make([]int, len(n.Edges))
+		copy(edges, n.Edges)
+		c.Nodes[i] = Node{edges, n.Label, n.Parent}
+	}
+	return c
+}
+
 func (g *Graph) dump() {
-	for vi, v := range g.Nodes {
-		if vi != v.Label {
+	for _, n := range g.Nodes {
+		if n.Parent != -1 {
 			fmt.Println("deleted")
 			continue
 		}
-		fmt.Printf("%d ", v.Label+1)
-		if v == nil {
-			continue
-		}
-		if v.Edges != nil {
-			for listIndex, edgeList := range v.Edges {
-				for eIndex, e := range edgeList {
-					endpoint := 0
-					if g.Nodes[e[0]].Label == v.Label {
-						endpoint = 1
-					}
-					fmt.Printf("%d", g.Nodes[e[endpoint]].Label+1)
-					if eIndex < len(v.Edges[listIndex])-1 {
-						fmt.Print(" ")
-					}
-				}
-				if listIndex < len(v.Edges)-1 {
-					fmt.Print(" ")
-				}
+		fmt.Print(n.Label+1)
+		fmt.Print(" ")
+		for j, ei := range n.Edges {
+			e := g.Edges[ei]
+			end := 0
+			if g.Nodes[e[end]].Label == n.Label {
+				end = 1
+			}
+			a := g.Nodes[e[end]]
+			fmt.Print(a.Label+1)
+			if j < len(n.Edges)-1 {
+				fmt.Print(" ")
 			}
 		}
 		fmt.Println()
 	}
 }
 
-func (g *Graph) contract(e *Edge) {
-	fmt.Printf("contracting %d <- %d\n", g.Nodes[e[0]].Label+1, g.Nodes[e[1]].Label+1)
-	for _, edgeList := range g.Nodes[e[1]].Edges {
-		g.Nodes[e[0]].Edges = append(g.Nodes[e[0]].Edges, edgeList)
+func (g *Graph) findRoot(i int) *Node {
+	// visited := make(map[int]bool)
+	path := []int{}
+	for i != -1 {
+		/*
+		if visited[i] {
+			panic("already visited, reference cycle?")
+		}
+		visited[i] = true
+		*/
+		n := g.Nodes[i]
+		path = append(path, i)
+		i = n.Parent
 	}
-	g.Nodes[e[1]].Edges = nil
-	g.Nodes[e[1]] = g.Nodes[e[0]]
+	if len(path) == -1 {
+		panic("expected at least one node in path")
+	}
+	root := &g.Nodes[path[len(path)-1]]
+	for _, i := range path[:len(path)-1] {
+		g.Nodes[i].Parent = root.Label
+	}
+	return root
+}
 
-	g.dump()
-	fmt.Println()
+func (g *Graph) contract(e Edge) {
+	a, b := g.findRoot(e[0]), g.findRoot(e[1])
+	b.Parent = a.Label
 }
 
 func (g *Graph) minCut() int {
@@ -158,13 +154,33 @@ func (g *Graph) minCut() int {
 	next := 0
 	edgeIndex := ids[next]
 	for nodesLeft := len(g.Nodes); nodesLeft > 2; nodesLeft-- {
-		for g.Nodes[g.Edges[edgeIndex][0]].Label == g.Nodes[g.Edges[edgeIndex][1]].Label {
+		for g.findRoot(g.Edges[edgeIndex][0]).Label == g.findRoot(g.Edges[edgeIndex][1]).Label {
 			next++
 			edgeIndex = ids[next]
 		}
-		g.contract(g.Edges[edgeIndex])
+		edge := g.Edges[edgeIndex]
+		g.contract(edge)
 	}
-	return -1000
+
+	// pick any root and count crossing edges, edges where the other endpoint's root is different.
+	k := 0
+	for _, e := range g.Edges {
+		if g.findRoot(e[0]).Label != g.findRoot(e[1]).Label {
+			k++
+		}
+	}
+	return k
+}
+
+func (g *Graph) findMinCut() int {
+	m := -1
+	for i := 0; i < len(g.Nodes) * len(g.Nodes); i++ {
+		k := g.copy().minCut()
+		if k < m || m == -1 {
+			m = k
+		}
+	}
+	return m
 }
 
 func main() {
@@ -177,6 +193,7 @@ func main() {
 		fmt.Printf("error: %v", err)
 		os.Exit(1)
 	}
-	fmt.Println(g.minCut())
-	fmt.Println(g)
+	fmt.Println("read")
+
+	fmt.Println(g.findMinCut())
 }
