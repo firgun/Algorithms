@@ -4,15 +4,12 @@ import (
 	"fmt"
 )
 
-type graph struct {
-	nodes [][]int
-	edges [][2]int
-}
+type graph [][]int
 
 func bfs(g graph, i int) []int {
-	v := make([]bool, len(g.nodes))
-	q := make([]int, 0, len(g.nodes))
-	r := make([]int, 0, len(g.nodes))
+	v := make([]bool, len(g))
+	q := make([]int, 0, len(g))
+	r := make([]int, 0, len(g))
 	v[i] = true
 	q = append(q, i)
 	for len(q) > 0 {
@@ -23,7 +20,7 @@ func bfs(g graph, i int) []int {
 			q = nil
 		}
 		r = append(r, n)
-		for _, a := range g.nodes[n] {
+		for _, a := range g[n] {
 			if !v[a] {
 				v[a] = true
 				q = append(q, a)
@@ -34,8 +31,7 @@ func bfs(g graph, i int) []int {
 }
 
 func main() {
-	g := graph{
-		nodes: [][]int{
+	g := graph([][]int{
 			{ 1, 2 },
 			{ 0, 3, 4 },
 			{ 0, 5, 6 },
@@ -43,15 +39,6 @@ func main() {
 			{ 1 },
 			{ 2 },
 			{ 2 },
-		},
-		edges: [][2]int{
-			{0, 1}, 
-			{0, 2}, 
-			{1, 3}, 
-			{1, 4}, 
-			{2, 5}, 
-			{2, 6},
-		},
-	}
+	})
 	fmt.Println(bfs(g, 0))
 }
