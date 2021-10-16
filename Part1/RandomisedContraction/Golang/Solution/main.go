@@ -65,7 +65,7 @@ func readGraph(path string) (*Graph, error) {
 				if !ok {
 					ei = len(g.Edges)
 					g.Edges = append(g.Edges, e)
-					edgeToIndex[e] = ei 
+					edgeToIndex[e] = ei
 				}
 				edges[i] = ei
 			}
@@ -95,7 +95,7 @@ func (g *Graph) dump() {
 			fmt.Println("deleted")
 			continue
 		}
-		fmt.Print(n.Label+1)
+		fmt.Print(n.Label + 1)
 		fmt.Print(" ")
 		for j, ei := range n.Edges {
 			e := g.Edges[ei]
@@ -104,7 +104,7 @@ func (g *Graph) dump() {
 				end = 1
 			}
 			a := g.Nodes[e[end]]
-			fmt.Print(a.Label+1)
+			fmt.Print(a.Label + 1)
 			if j < len(n.Edges)-1 {
 				fmt.Print(" ")
 			}
@@ -114,15 +114,8 @@ func (g *Graph) dump() {
 }
 
 func (g *Graph) findRoot(i int) *Node {
-	// visited := make(map[int]bool)
 	path := []int{}
 	for i != -1 {
-		/*
-		if visited[i] {
-			panic("already visited, reference cycle?")
-		}
-		visited[i] = true
-		*/
 		n := g.Nodes[i]
 		path = append(path, i)
 		i = n.Parent
@@ -161,8 +154,6 @@ func (g *Graph) minCut() int {
 		edge := g.Edges[edgeIndex]
 		g.contract(edge)
 	}
-
-	// pick any root and count crossing edges, edges where the other endpoint's root is different.
 	k := 0
 	for _, e := range g.Edges {
 		if g.findRoot(e[0]).Label != g.findRoot(e[1]).Label {
@@ -174,7 +165,7 @@ func (g *Graph) minCut() int {
 
 func (g *Graph) findMinCut() int {
 	m := -1
-	for i := 0; i < len(g.Nodes) * len(g.Nodes); i++ {
+	for i := 0; i < len(g.Nodes)*len(g.Nodes); i++ {
 		k := g.copy().minCut()
 		if k < m || m == -1 {
 			m = k

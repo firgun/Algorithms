@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -81,13 +82,51 @@ func times(g graph) []int {
 	return f
 }
 
-func leaders(g graph) []int {
-	
+func dfs2(g graph, v []bool, l []int, n int, f int) {
+	l[n] = f
+	for _, a := range g[n].o {
+		if !v[a] {
+			v[a] = true
+			dfs2(g, v, l, a, f)
+		}
+	}
 }
 
-func sccs(g graph) {
+func leaders(g graph, f []int) []int {
+	o := make([]int, len(g))
+	for i, t := range f {
+		o[t-1] = i
+	}
+	l := make([]int, len(g))
+	for i := range l {
+		l[i] = -1
+	}
+	v := make([]bool, len(g))
+	for i := len(o) - 1; i >= 0; i-- {
+		n := o[i]
+		if !v[n] {
+			v[n] = true
+			dfs2(g, v, l, n, f[n])
+		}
+	}
+	return l
+}
+
+func sccs(g graph) []int {
 	f := times(g)
-	fmt.Println(f)
+	l := leaders(g, f)
+	c := make([]int, len(l))
+	for _, t := range l {
+		c[t-1]++
+	}
+	sort.Ints(c)
+	r := make([]int, 5)
+	for i := 0; i < 5; i++ {
+		if i < 5 {
+			r[i] = c[len(c)-1-i]
+		}
+	}
+	return r
 }
 
 func main() {
@@ -107,22 +146,5 @@ func main() {
 		fmt.Printf("error: failed to load graph: %v\n", err)
 		os.Exit(1)
 	}
-
-	sccs(*g)
-
-	/*
-		for l, n := range *g {
-			fmt.Print(l+1, " -> ")
-			fmt.Print("i: ")
-			for _, i := range n.i {
-				fmt.Print(i+1, " ")
-			}
-			fmt.Print("o: ")
-			for _, o := range n.o {
-				fmt.Print(o+1, " ")
-			}
-			fmt.Println()
-		}
-	*/
-
+	fmt.Println(sccs(*g))
 }
