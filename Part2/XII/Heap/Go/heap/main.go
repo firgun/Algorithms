@@ -16,11 +16,7 @@ type heap []struct {
 
 func (h *heap) insert(key int, value interface{}) {
 	*h = append(*h, heapEntry{key, value})
-	i := len(*h) - 1
-	for i != 0 && (*h)[i].key < (*h)[i/2].key {
-		(*h)[i], (*h)[i/2] = (*h)[i/2], (*h)[i]
-		i = i / 2
-	}
+	h.siftUp(len(*h) - 1)
 }
 
 func (h *heap) extractMin() (heapEntry, bool) {
@@ -30,7 +26,18 @@ func (h *heap) extractMin() (heapEntry, bool) {
 	r := (*h)[0]
 	(*h)[0], (*h)[len(*h)-1] = (*h)[len(*h)-1], (*h)[0]
 	*h = (*h)[:len(*h)-1]
-	for i := 0; i < len(*h) && 2*i < len(*h); i++ {
+	h.siftDown(0)
+	return r, true
+}
+
+func (h *heap) siftUp(i int) {
+	for ; i != 0 && (*h)[i].key < (*h)[i/2].key; i = i / 2 {
+		(*h)[i], (*h)[i/2] = (*h)[i/2], (*h)[i]
+	}
+}
+
+func (h *heap) siftDown(i int) {
+	for ; i < len(*h) && 2*i < len(*h); i++ {
 		l, r := 2*i, 2*i+1
 		if (*h)[i].key > (*h)[l].key || (r < len(*h) && (*h)[i].key > (*h)[r].key) {
 			var c int
@@ -45,7 +52,16 @@ func (h *heap) extractMin() (heapEntry, bool) {
 			break
 		}
 	}
-	return r, true
+}
+
+func (h *heap) delete(i int) {
+	if i < 0 || i >= len(*h) {
+		panic(fmt.Errorf("index out of range: %d", i))
+	}
+	(*h)[i], (*h)[len(*h)-1] = (*h)[len(*h)-1], (*h)[i]
+	*h = (*h)[:len(*h)-1]
+	h.siftUp(i)
+	h.siftDown(i)
 }
 
 func (h *heap) dump() {
@@ -71,12 +87,17 @@ func main() {
 	h.insert(1, "Sam")
 	h.dump()
 
-	fmt.Println()
-	for len(h) > 0 {
-		fmt.Println(h.extractMin())
+	h.delete(1)
+	h.dump()
 
+	/*
 		fmt.Println()
-		h.dump()
-		fmt.Println()
-	}
+		for len(h) > 0 {
+			fmt.Println(h.extractMin())
+
+			fmt.Println()
+			h.dump()
+			fmt.Println()
+		}
+	*/
 }
