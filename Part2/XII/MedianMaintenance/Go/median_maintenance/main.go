@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
+	"path"
 	"strconv"
+	"strings"
 )
 
 func readArray(path string) ([]int, error) {
@@ -138,19 +139,10 @@ func (h *heap) peek() int {
 // (a + b) mod n = [(a mod n) + (b mod n)] mod n.
 //
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("bad usage")
-		os.Exit(1)
-	}
-	arr, err := readArray(os.Args[1])
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+func solve(arr []int) int64 {
 	var s int64
 	var hHigh, hLow heap
-	for _, n := range arr {
+	for k, n := range arr {
 		if len(hHigh) == 0 || n >= hHigh.peek() {
 			hHigh.insert(n, n)
 		} else {
@@ -164,10 +156,73 @@ func main() {
 			e, _ := hLow.extractMin()
 			hHigh.insert(-e.key, e.val)
 		}
-		s += int64(hHigh.peek())
+		if (k+1)%2 == 0 {
+			s += int64(hLow.peek())
+		} else {
+			s += int64(hHigh.peek())
+		}
 	}
-	fmt.Println(s % 10000)
+	return s % 10000
 }
 
+func runGeneratedTestCases() {
+	algoPath, ok := os.LookupEnv("ALGO_PATH")
+	if !ok {
+		panic("ALGO_PATH environment variable not set")
+	}
+	dirPath := path.Join(algoPath, "Tests/Part2/XII/Generated")
+	dirList, err := os.ReadDir(dirPath)
+	if err != nil {
+		panic(err)
+	}
+	numFails := 0
+	for _, ent := range dirList {
+		if !ent.Type().IsRegular() || !strings.HasPrefix(ent.Name(), "input") {
+			continue
+		}
+		iName := ent.Name()
+		oName := strings.Replace(ent.Name(), "input", "output", 1)
+		inputArray, err := readArray(path.Join(dirPath, iName))
+		if err != nil {
+			panic(err)
+		}
+		outputArray, err := readArray(path.Join(dirPath, oName))
+		if err != nil {
+			panic(err)
+		}
+		if len(outputArray) != 1 {
+			panic("unexpected output array")
+		}
+		expected := outputArray[0]
+		actual := solve(inputArray)
+		if expected != int(actual) {
+			fmt.Printf("failed: test case: %s, expected: %d, actual: %d\n", iName, expected, actual)
+			numFails++
+		}
+		break
+	}
+	if numFails > 0 {
+		fmt.Printf("total fails: %d\n", numFails)
+	} else {
+		fmt.Printf("passed tests\n")
+	}
+}
 
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("bad usage")
+		os.Exit(1)
+	}
 
+	if os.Args[1] == "-g" {
+		runGeneratedTestCases()
+	} else {
+		arr, err := readArray(os.Args[1])
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		ans := solve(arr)
+		fmt.Println(ans)
+	}
+}
