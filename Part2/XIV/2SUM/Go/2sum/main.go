@@ -9,6 +9,18 @@ import (
 	"strings"
 )
 
+// TODO
+//
+// When I have time and want... I should look at optimizing the solve routine.
+//
+// I was thinking that sorting once up front would allow me to do a binary search
+// for a ~20001 element window that I'd have to inspect instead of the entire
+// array.
+//
+// So everything should run as quickly as the 20000 element inputs, assuming there's
+// not a crazy amount of duplicates?
+//
+
 func readIntArray(path string) ([]int, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -41,7 +53,8 @@ func solve(arr []int) int {
 	for _, n := range arr {
 		c[n] = true
 	}
-	for t := -10000; t <= 10000; t++ {
+	tStart, tEnd := -10000, 10000
+	for t := tStart; t <= tEnd; t++ {
 		for _, n := range arr {
 			if c[t-n] && n != t/2 {
 				sums++
@@ -58,6 +71,22 @@ func main() {
 		fmt.Println("error: ALGO_PATH environment variable not set, cannot located generated tests, exiting.")
 		os.Exit(1)
 	}
+
+	if len(os.Args) != 2 {
+		fmt.Println("incorrect usage: 2sum [<filename>|-g]")
+		os.Exit(1)
+	}
+
+	if os.Args[1] != "-g" {
+		iPath := path.Join(algoPath, os.Args[1])
+		iArr, err := readIntArray(iPath)
+		if err != nil {
+			fmt.Printf("error: failed to read input from %q, error: %v\n", iPath, err)
+		}
+		fmt.Println(solve(iArr))
+		os.Exit(0)
+	}
+
 	basePath := path.Join(algoPath, "Tests/Part2/XIV/Generated")
 	dirEntries, err := os.ReadDir(basePath)
 	if err != nil {
