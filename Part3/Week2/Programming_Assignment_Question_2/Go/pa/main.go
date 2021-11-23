@@ -5,22 +5,23 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+
 	// "sort"
+	"bufio"
 	"strconv"
 	"strings"
-	"bufio"
 )
 
 //
 // The idea
 //
-// We need to find the largest k for which the max spacing between components is at least 
+// We need to find the largest k for which the max spacing between components is at least
 // 3.
 //
-// In other words, we need to put all 0, 1 and 2 hamming distance nodes in the same 
+// In other words, we need to put all 0, 1 and 2 hamming distance nodes in the same
 // component
 //
-// For 0, it's really easy because that just means the nodes have the same value. We 
+// For 0, it's really easy because that just means the nodes have the same value. We
 // could sort or use maps with the bit pattern as the key and an array of nodes as the
 // value.
 //
@@ -34,7 +35,7 @@ import (
 // We iterate over all pairs 1 <= i < j <= n and toggle those bits and check for matches
 // in the hash map.
 //
-// There are at most 24 bits, there are n*(n-1)/2 = 24*23/2 = 276 distinct bit pairs that 
+// There are at most 24 bits, there are n*(n-1)/2 = 24*23/2 = 276 distinct bit pairs that
 // we could try and toggle.
 //
 // There are 200'000 bit patterns so that's at most 200'000 * 276 <= 60'000'000
@@ -44,7 +45,7 @@ import (
 //
 // 200'000 * 200'000 = 4 * 10^10 = 40'000'000'000
 //
-// So while it's still a lot of work, it's several orders of magnitude better than the 
+// So while it's still a lot of work, it's several orders of magnitude better than the
 // naive version for our large test input at least.
 //
 
@@ -61,155 +62,80 @@ func hammingDistance(a, b string) int {
 	return d
 }
 
+func toggle(b byte) byte {
+	if b == '0' {
+		return '1'
+	} else if b == '1' {
+		return '0'
+	}
+	panic("expected 1 or 0")
+}
+
+func union(k int, index int, item string, m map[string][]int, leaders []int, ccs [][]int) int {
+	if otherIndexes, ok := m[item]; ok {
+		for _, otherIndex := range otherIndexes {
+			if leaders[index] != leaders[otherIndex] {
+				lesser, greater := leaders[index], leaders[otherIndex]
+				if len(ccs[lesser]) > len(ccs[greater]) {
+					lesser, greater = greater, lesser
+				}
+
+				for _, index := range ccs[lesser] {
+					leaders[index] = greater
+					ccs[greater] = append(ccs[greater], index)
+				}
+
+				ccs[lesser] = nil
+				k--
+			}
+		}
+	}
+	return k
+}
+
 func solve(arr []string) int {
 	leaders := make([]int, len(arr))
 	for i := range leaders {
 		leaders[i] = i
 	}
-	
+
 	ccs := make([][]int, len(arr))
 	for i := range ccs {
 		ccs[i] = []int{i}
 	}
-	
+
 	k := len(arr)
-	
+
 	m := make(map[string][]int)
 	for index, item := range arr {
 		m[item] = append(m[item], index)
 	}
 
-	var hdist0_cont, hdist1_cont, hdist2_cont int
-		
-	for {
-		var a, b int
-		
-		minDist := -1
-		
-		/*
-		
-		naive solution
-		
-		for i := range arr {
-			// naive solution
-			for j := i+1; j < len(arr); j++ {
-				d := hammingDistance(arr[i], arr[j])
-				if d <= 2 && (minDist == -1 || d < minDist) && leaders[i] != leaders[j] {
-					a, b = i, j
-					minDist = d
-				}
-			}
-		}
-		*/
-		
-		// Hamming distance of 0
-		for index := hdist0_cont; index < len(arr); index++ {
-			item := arr[index]
-			if otherIndexes, ok := m[item]; ok {
-				for _, otherIndex := range otherIndexes {
-					if index != otherIndex && leaders[index] != leaders[otherIndex] {
-						a, b = index, otherIndex
-						minDist = 0
-						goto done0
-					}
-				}
-			}
-			hdist0_cont = index
-		}
-		done0:
-		
-		// Hamming distance of 1
-		if minDist == -1 {
-			for index := hdist1_cont; index < len(arr); index++ {
-				item := arr[index]
-				buf := []byte(item)
-				for i := range buf {
-					cur := buf[i]
-					if cur == '0' {
-						buf[i] = '1'
-					} else if cur == '1' {
-						buf[i] = '0'
-					}
-					if otherIndexes, ok := m[string(buf)]; ok {
-						for _, otherIndex := range otherIndexes {
-							if index != otherIndex && leaders[index] != leaders[otherIndex] {
-								a, b = index, otherIndex
-								minDist = 1
-								goto done1
-							}
-						}
-					}
-					buf[i] = cur
-					hdist1_cont = index
-				}
-			}
-		}
-		done1:
+	for index, item := range arr {
+		k = union(k, index, item, m, leaders, ccs)
+	}
 
-		// Hamming distance of 2		
-		if minDist == -1 {
-			for index := hdist2_cont; index < len(arr); index++ {
-				item := arr[index]
-				buf := []byte(item)
-				for i := range buf {
-					for j := i+1; j < len(buf); j++ {
-						curi, curj := buf[i], buf[j]
-						
-						if curi == '0' {
-							buf[i] = '1'
-						} else if curi == '1' {
-							buf[i] = '0'
-						} else {
-							panic("invalid!!!")
-						}
-						
-						if curj == '0' {
-							buf[j] = '1'
-						} else if curj == '1' {
-							buf[j] = '0'
-						} else {
-							panic("invalid!!!")
-						}
-						
-						if otherIndexes, ok := m[string(buf)]; ok {
-							for _, otherIndex := range otherIndexes {
-								if index != otherIndex && leaders[index] != leaders[otherIndex] {
-									a, b = index, otherIndex
-									minDist = 2
-									goto done2
-								}
-							}
-						}
-						buf[i] = curi
-						buf[j] = curj
-					}
-				}
-				hdist2_cont = index
-			}
-		}
-		done2:
-		
-		if minDist == -1 { 
-			return k
-		}
-		
-		if leaders[a] != leaders[b] {
-			lesser, greater := leaders[a], leaders[b]
-			if len(ccs[lesser]) > len(ccs[greater]) {
-				lesser, greater = greater, lesser
-			}
-			
-			for _, index := range ccs[lesser] {
-				leaders[index] = greater
-				ccs[greater] = append(ccs[greater], index)
-			}
-			
-			ccs[lesser] = nil
-			k--
+	for index, item := range arr {
+		buf := []byte(item)
+		for i := range buf {
+			buf[i] = toggle(buf[i])
+			k = union(k, index, string(buf), m, leaders, ccs)
+			buf[i] = toggle(buf[i])
 		}
 	}
-	
-	return -1
+
+	for index, item := range arr {
+		buf := []byte(item)
+		for i := range buf {
+			for j := i + 1; j < len(buf); j++ {
+				buf[i], buf[j] = toggle(buf[i]), toggle(buf[j])
+				k = union(k, index, string(buf), m, leaders, ccs)
+				buf[i], buf[j] = toggle(buf[i]), toggle(buf[j])
+			}
+		}
+	}
+
+	return k
 }
 
 func main() {
@@ -253,7 +179,7 @@ func main() {
 		arr, err := readInput(ifPath)
 		if err != nil {
 			fmt.Printf("error: failed to read input for path: %q, error: %v\n", ifPath, err)
-			os.	Exit(1)
+			os.Exit(1)
 		}
 
 		exp, err := readOutput(ofPath)
@@ -308,7 +234,7 @@ func readInput(path string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("readInput: error parsing header token: %v", err)
 		}
-	} else if s.Err() != nil {	
+	} else if s.Err() != nil {
 		return nil, fmt.Errorf("readInput: scanner error: %v", s.Err())
 	} else {
 		return nil, fmt.Errorf("readInput: unexpected EOF")
@@ -319,7 +245,7 @@ func readInput(path string) ([]string, error) {
 		if len(tokens) != numBits {
 			return nil, fmt.Errorf("readInput: invalid bit-string length, want: %d, got: %d", numBits, len(tokens))
 		}
-		bitArray := make([]string, numBits)		
+		bitArray := make([]string, numBits)
 		for i, tok := range tokens {
 			tok = strings.Trim(tok, " \t\r\n")
 			if tok != "0" && tok != "1" {
