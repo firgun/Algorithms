@@ -186,7 +186,7 @@ func main() {
 			}
 			fmt.Println()
 		}
-		fmt.Printf("total: %d, failed: %d\n", len(dirEntries), failed)
+		fmt.Printf("total: %d, failed: %d\n", len(dirEntries) / 2, failed)
 		return
 	}
 
