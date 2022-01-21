@@ -1,0 +1,61 @@
+Single-Source Shortest Path Problem
+
+Input: A graph G = (V, E), real-valued edges weights L[e] for all e in E. A designated source vertex s in V. Assume m >= n. Output: If G contains a negative cycle, detect and signal this case, otherwise return all shortest s-v paths.
+
+Bellman-Ford Stopping Criterion
+
+Let v denote any vertex v. If L[k][v] == L[k-1][v] then L[i][v] = L[k-1][v] for all i >= k and L[k][v] contains shortest s-v path distances.
+
+Bellman-Ford Recurrence
+
+L[i][v] = min { L[i-1][v], min { L[i-1][v] + L[w][v] for all edges (w, v) } }
+
+Bellman-Ford Running Time
+
+O(nm)
+
+Floyd-Warshall Recurrence
+
+L[k][v][w] = min { L[k-1][v][w], L[k-1][v][k] + L[k-1][k][w] }
+
+
+Let G = (V, E) be an input graph. What is L[0][v][w] for all v, w in V when i.) v == w ii.) (v, w) is an edge in E iii.) (v, w) is not an edge in V.
+
+i.) 0    ii.) L[v][w]    iii.) +Infinity
+
+
+In Bellman-Ford, how many candidates are there for the solution to a subproblem L[i][v]?
+
+1 + InDegreeOf(v)
+
+What's the running time of the Floyd-Warshall algorithm?
+
+O(n^3)
+
+How can we detect negative cycles in O(mn) time? (So we can make an early exit from the more expensive main loop in Floyd-Warshall.)
+
+Add a new source vertex s to the input graph G = (V, E). Construct a new graph G' by adding a zero cost edge (s, v) for all V. Run Bellman-Ford starting at that source s and if Bellman ford reports a negative cycle, then there must be a negative cycle in the original input graph G.
+
+What definition of path length allows BFS to be applied to the single-source shortest path problem?
+
+length(P) ::= |P|
+
+What is the running time of the a.) naive and b.) heap-based implementation of Dijkstra's algorithm?
+
+i.) O(n*m^2)    ii.) O((n + m)*log(n)) 
+
+All Pairs Shortest Path Problem
+
+Input: A graph G = (V, E), edge weights L[e] for all e in E. Output: If G contains a negative cycle, terminate, otherwise return shortest v-w path distances for all v and w in V.
+
+How does Floyd-Warshall detect the presence of negative cycles? 
+
+After running the main-loop, we check the diagonal of the solutions matrix. i.e., whenever v == w. We expect that the shortest path distance is 0 in such cases. If there is a negative cycle, the shortest path distance will be < 0 for some vertex in V.
+
+How many different subproblems are defined by a.) Bellman-Ford and b.) Floyd-Warshall?
+
+a.) O(n^2)    b.) O(n^3)
+
+In Bellman-Ford, what does the artificial variable i control?
+
+The hop-budget for shortest-paths. In the ith batch of subproblems, we consider shortest paths of at most i edges. L[i][v] is the shortest path with at most i edges (but not necessarily the shortest path overall!)
