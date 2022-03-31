@@ -11,13 +11,6 @@ import (
 	"time"
 )
 
-// TODO
-// [x] refresh yourself on the algorithm using the lecture slides
-// [-] design small simple test cases
-// [x] implement input parsing
-// [x] implement the algorithm
-// [ ] debug and test on all generated test cases
-
 type clause struct {
 	a, b int
 }
